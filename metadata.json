@@ -1,0 +1,8 @@
+{
+  "name": "EchoRIS",
+  "description": "A relational memory archive preserving life moments connected with people, places, emotions, and timelines.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
