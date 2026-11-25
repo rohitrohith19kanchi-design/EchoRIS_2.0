@@ -1,59 +1,50 @@
-  import { useEffect, useState } from "react";
-  import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "motion/react";
-  import AmbientStarfield from "./components/AmbientStarfield";
-  import Navigation from "./components/Navigation";
-  import HeroSection from "./components/HeroSection";
-  import MemoryCard from "./components/MemoryCard";
-  import MemoryDetailModal from "./components/MemoryDetailModal";
-  import MemoryFormModal from "./components/MemoryFormModal";
-  import PeopleView from "./components/PeopleView";
-  import PlacesView from "./components/PlacesView";
-  import TimelineView from "./components/TimelineView";
-  import RelationalNexus from "./components/RelationalNexus";
-  import PinnedStoryteller from "./components/PinnedStoryteller";
-  import PinnedMemoryShowcase from "./components/PinnedMemoryShowcase";
-  import PinnedMemoryExploration from "./components/PinnedMemoryExploration";
-  import logoImg from "./assets/echoris_orbs.png";
-  import AuthScreen from "./components/AuthScreen";
-  import { memoryAPI, getToken, clearToken } from "./lib/api";
+import { useEffect, useState } from "react";
+import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "motion/react";
+import AmbientStarfield from "./components/AmbientStarfield";
+import Navigation from "./components/Navigation";
+import HeroSection from "./components/HeroSection";
+import MemoryCard from "./components/MemoryCard";
+import MemoryDetailModal from "./components/MemoryDetailModal";
+import MemoryFormModal from "./components/MemoryFormModal";
+import PeopleView from "./components/PeopleView";
+import PlacesView from "./components/PlacesView";
+import TimelineView from "./components/TimelineView";
+import RelationalNexus from "./components/RelationalNexus";
+import PinnedStoryteller from "./components/PinnedStoryteller";
+import PinnedMemoryShowcase from "./components/PinnedMemoryShowcase";
+import PinnedMemoryExploration from "./components/PinnedMemoryExploration";
+import logoImg from "./assets/echoris_orbs.png";
+import AuthScreen from "./components/AuthScreen";
+import { memoryAPI, getToken, clearToken } from "./lib/api";
 
-  const initialMemories = [
-    {
-      id: 1,
-      title: "College fest",
-      description:
-        "A fun day spent with friends at the college fest. The live music reverberated through the courtyard, lanterns glowing in the evening dusk. One of those days I wish I could relive.",
-      date: "October 29, 2026",
-      people: ["Ananya"],
-      place: "College campus",
-      emotion: "Nostalgia",
-      color: "from-violet-500/20 to-indigo-500/10",
-    },
-    {
-      id: 2,
-      title: "A quiet evening",
-      description:
-        "Watching the sunset bathe the skyline in amber light, talking about absolutely everything from childhood dreams to the mysteries of the universe.",
-      date: "October 18, 2026",
-      people: ["Rahul", "Ananya"],
-      place: "Our favorite café",
-      emotion: "Peace",
-      color: "from-emerald-500/20 to-teal-500/10",
-    },
-    {
-      id: 3,
-      title: "The first project",
-      description:
-        "The sleepless thrill and shared excitement of building something together from scratch for the very first time. Whiteboards covered in diagrams and endless cups of chai.",
-      date: "October 12, 2026",
-      people: ["Rahul"],
-      place: "College lab",
-      emotion: "Pride",
-      color: "from-amber-500/20 to-orange-500/10",
-    },
-  ];
+  const formatMemoryDate = (date) => {
+  if (!date) return "Date not specified";
 
-  export default function App() {
+  const dateOnly = String(date).slice(0, 10);
+  const parsedDate = new Date(`${dateOnly}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) return "Date not specified";
+
+  return parsedDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const mapDatabaseMemory = (memory) => ({
+  id: memory.id,
+  title: memory.title,
+  description: memory.content || "",
+  date: formatMemoryDate(memory.memory_date),
+  people: Array.isArray(memory.people) ? memory.people : [],
+  place: memory.place || "Place not specified",
+  emotion: memory.emotion || "Wonder",
+  visibility: memory.visibility || "private",
+  color: "from-violet-500/20 to-indigo-500/10",
+});
+
+export default function App() {
     const shouldReduceMotion = useReducedMotion();
     const { scrollY } = useScroll();
     const smoothScrollY = useSpring(scrollY, {
@@ -65,43 +56,70 @@
     const orb2Y = useTransform(smoothScrollY, [0, 1000], [0, -55]);
 
     const [memories, setMemories] = useState([]);
-const [user, setUser] = useState(null);
-const [authLoading, setAuthLoading] = useState(true);
-const [memoryLoading, setMemoryLoading] = useState(false);
-const [apiError, setApiError] = useState("");
+    const [user, setUser] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [memoryLoading, setMemoryLoading] = useState(false);
+    const [apiError, setApiError] = useState("");
+
+    // Existing dashboard UI state.
+    const [activePage, setActivePage] = useState("Dashboard");
+    const [search, setSearch] = useState("");
+    const [selectedEmotion, setSelectedEmotion] = useState("All");
+    const [showForm, setShowForm] = useState(false);
+    const [selectedMemory, setSelectedMemory] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [viewMode, setViewMode] = useState("grid");
 
     const loadMemories = async () => {
-  setMemoryLoading(true);
-  setApiError("");
+      setMemoryLoading(true);
+      setApiError("");
 
-  try {
-    const data = await memoryAPI.getAll();
-    setMemories(data.map(mapDatabaseMemory));
-    return true;
-  } catch (error) {
-    setApiError(error.message);
+      try {
+        const data = await memoryAPI.getAll();
+        setMemories(data.map(mapDatabaseMemory));
+        return true;
+      } catch (error) {
+        setApiError(error.message || "Unable to load your memories.");
 
-    if (error.status === 401 || error.status === 403) {
+        if (error.status === 401 || error.status === 403) {
+          clearToken();
+          setUser(null);
+        }
+
+        return false;
+      } finally {
+        setMemoryLoading(false);
+        setAuthLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      if (!getToken()) {
+        setAuthLoading(false);
+        return;
+      }
+
+      setUser({});
+      loadMemories();
+    }, []);
+
+    const handleAuthenticated = async (authenticatedUser) => {
+      setUser(authenticatedUser);
+      await loadMemories();
+    };
+
+    const handleLogout = () => {
       clearToken();
       setUser(null);
-    }
-
-    return false;
-  } finally {
-    setMemoryLoading(false);
-    setAuthLoading(false);
-  }
-};
-
-useEffect(() => {
-  if (!getToken()) {
-    setAuthLoading(false);
-    return;
-  }
-
-  setUser({});
-  loadMemories();
-}, []);
+      setMemories([]);
+      setApiError("");
+      setActivePage("Dashboard");
+      setSearch("");
+      setSelectedEmotion("All");
+      setSelectedMemory(null);
+      setShowDeleteConfirm(false);
+      setShowForm(false);
+    };
 
     const [form, setForm] = useState({
       title: "",
@@ -119,52 +137,62 @@ useEffect(() => {
       }));
     };
 
-    const deleteMemory = () => {
+    const deleteMemory = async () => {
       if (!selectedMemory) return;
 
-      setMemories((previous) =>
-        previous.filter((memory) => memory.id !== selectedMemory.id)
-      );
+      setApiError("");
 
-      setSelectedMemory(null);
-      setShowDeleteConfirm(false);
+      try {
+        await memoryAPI.delete(selectedMemory.id);
+
+        setMemories((previous) =>
+          previous.filter((memory) => memory.id !== selectedMemory.id)
+        );
+
+        setSelectedMemory(null);
+        setShowDeleteConfirm(false);
+      } catch (error) {
+        setApiError(error.message || "Unable to archive this memory.");
+      }
     };
 
-    const createMemory = (event) => {
+    const createMemory = async (event) => {
       event.preventDefault();
+      setApiError("");
 
-      const newMemory = {
-        id: Date.now(),
-        title: form.title,
-        description: form.description,
-        date: form.date
-          ? new Date(form.date + "T00:00:00").toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })
-          : "Date not specified",
-        people: form.person
-          .split(",")
-          .map((person) => person.trim())
-          .filter(Boolean),
-        place: form.place || "Place not specified",
-        emotion: form.emotion || "Wonder",
-        color: "from-violet-500/20 to-indigo-500/10",
-      };
+      try {
+        const createdMemory = await memoryAPI.create({
+          title: form.title.trim(),
+          content: form.description,
+          memory_date: form.date || null,
+          visibility: "private",
+          people: form.person
+            .split(",")
+            .map((person) => person.trim())
+            .filter(Boolean),
+          place: form.place.trim(),
+          emotion: form.emotion.trim(),
+        });
 
-      setMemories((previous) => [newMemory, ...previous]);
-      setForm({
-        title: "",
-        description: "",
-        date: "",
-        person: "",
-        place: "",
-        emotion: "",
-      });
+        setMemories((previous) => [
+          mapDatabaseMemory(createdMemory),
+          ...previous,
+        ]);
 
-      setShowForm(false);
-      setActivePage("Memories");
+        setForm({
+          title: "",
+          description: "",
+          date: "",
+          person: "",
+          place: "",
+          emotion: "",
+        });
+
+        setShowForm(false);
+        setActivePage("Memories");
+      } catch (error) {
+        setApiError(error.message || "Unable to save this memory.");
+      }
     };
 
     // Filter memories based on search query and optional emotion filter
@@ -207,6 +235,18 @@ useEffect(() => {
         ? "The people in your story."
         : "Places that stay with you.";
 
+    if (authLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#080713] text-white">
+          Loading EchoRIS...
+        </div>
+      );
+    }
+
+    if (!user) {
+      return <AuthScreen onAuthenticated={handleAuthenticated} />;
+    }
+
     return (
       <div className="relative min-h-screen bg-[#07080e] text-slate-100 flex flex-col md:flex-row pb-20 md:pb-0 overflow-x-clip">
         {/* Scroll-linked ambient atmospheric glow elements */}
@@ -238,6 +278,27 @@ useEffect(() => {
 
         {/* Main Archival Canvas */}
         <main className="relative z-10 min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10">
+          {apiError && (
+            <div
+              role="alert"
+              className="mb-5 flex flex-col gap-3 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span>{apiError}</span>
+              <button
+                type="button"
+                onClick={loadMemories}
+                className="self-start rounded-lg border border-rose-300/20 px-3 py-1.5 text-xs hover:bg-rose-400/10 sm:self-auto"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {memoryLoading && (
+            <p className="mb-4 text-xs text-slate-400" role="status">
+              Syncing your memory archive...
+            </p>
+          )}
           {/* Curated Top Bar Header (Desktop only breadcrumb & quick actions) */}
           <header className="mb-8 hidden md:flex items-center justify-between border-b border-white/[0.06] pb-4">
             <div className="flex items-center gap-2 text-xs font-sans text-slate-400">
@@ -572,9 +633,18 @@ useEffect(() => {
               <span>Relational Memory Archive</span>
             </div>
 
-            <p className="text-[11px] text-slate-600 font-serif italic text-center sm:text-right">
-              Preserving life's echoes, companions, and sacred sanctuaries.
-            </p>
+            <div className="flex items-center gap-4">
+              <p className="text-[11px] text-slate-600 font-serif italic text-center sm:text-right">
+                Preserving life's echoes, companions, and sacred sanctuaries.
+              </p>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-slate-400 transition hover:bg-white/5 hover:text-white"
+              >
+                Sign Out
+              </button>
+            </div>
           </footer>
         </main>
 
