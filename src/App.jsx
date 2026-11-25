@@ -1,4 +1,4 @@
-  import { useState } from "react";
+  import { useEffect, useState } from "react";
   import { motion, useScroll, useTransform, useSpring, useReducedMotion } from "motion/react";
   import AmbientStarfield from "./components/AmbientStarfield";
   import Navigation from "./components/Navigation";
