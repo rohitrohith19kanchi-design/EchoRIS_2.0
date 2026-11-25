@@ -62,14 +62,11 @@
     const orb1Y = useTransform(smoothScrollY, [0, 1000], [0, 70]);
     const orb2Y = useTransform(smoothScrollY, [0, 1000], [0, -55]);
 
-    const [memories, setMemories] = useState(initialMemories);
-    const [activePage, setActivePage] = useState("Dashboard");
-    const [search, setSearch] = useState("");
-    const [selectedEmotion, setSelectedEmotion] = useState("All");
-    const [showForm, setShowForm] = useState(false);
-    const [selectedMemory, setSelectedMemory] = useState(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [viewMode, setViewMode] = useState("grid"); // "grid" | "timeline"
+    const [memories, setMemories] = useState([]);
+const [user, setUser] = useState(null);
+const [authLoading, setAuthLoading] = useState(true);
+const [memoryLoading, setMemoryLoading] = useState(false);
+const [apiError, setApiError] = useState("");
 
     const [form, setForm] = useState({
       title: "",
