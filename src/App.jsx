@@ -14,6 +14,8 @@
   import PinnedMemoryShowcase from "./components/PinnedMemoryShowcase";
   import PinnedMemoryExploration from "./components/PinnedMemoryExploration";
   import logoImg from "./assets/echoris_orbs.png";
+  import AuthScreen from "./components/AuthScreen";
+  import { memoryAPI, getToken, clearToken } from "./lib/api";
 
   const initialMemories = [
     {
@@ -67,6 +69,39 @@ const [user, setUser] = useState(null);
 const [authLoading, setAuthLoading] = useState(true);
 const [memoryLoading, setMemoryLoading] = useState(false);
 const [apiError, setApiError] = useState("");
+
+    const loadMemories = async () => {
+  setMemoryLoading(true);
+  setApiError("");
+
+  try {
+    const data = await memoryAPI.getAll();
+    setMemories(data.map(mapDatabaseMemory));
+    return true;
+  } catch (error) {
+    setApiError(error.message);
+
+    if (error.status === 401 || error.status === 403) {
+      clearToken();
+      setUser(null);
+    }
+
+    return false;
+  } finally {
+    setMemoryLoading(false);
+    setAuthLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (!getToken()) {
+    setAuthLoading(false);
+    return;
+  }
+
+  setUser({});
+  loadMemories();
+}, []);
 
     const [form, setForm] = useState({
       title: "",
