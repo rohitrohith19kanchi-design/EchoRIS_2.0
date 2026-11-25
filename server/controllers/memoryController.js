@@ -272,7 +272,7 @@ export const createMemory = async (req, res) => {
   }
 };
 
-// PATCH update core memory details
+// PATCH update memory details and relationships
 export const updateMemory = async (req, res) => {
   try {
     if (!isValidUUID(req.params.id)) {
@@ -281,98 +281,192 @@ export const updateMemory = async (req, res) => {
       });
     }
 
-    const { title, content, memory_date, visibility } = req.body;
+    const {
+      title,
+      content,
+      memory_date,
+      visibility,
+      people,
+      place,
+      emotion,
+    } = req.body;
+
+    const hasTitle = Object.prototype.hasOwnProperty.call(req.body, "title");
+    const hasContent = Object.prototype.hasOwnProperty.call(req.body, "content");
+    const hasMemoryDate = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "memory_date"
+    );
+    const hasVisibility = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "visibility"
+    );
+    const hasPeople = Object.prototype.hasOwnProperty.call(req.body, "people");
+    const hasPlace = Object.prototype.hasOwnProperty.call(req.body, "place");
+    const hasEmotion = Object.prototype.hasOwnProperty.call(req.body, "emotion");
 
     if (
-      (title !== undefined &&
-        (typeof title !== "string" || !title.trim() || title.length > 200)) ||
-      (content !== undefined &&
+      (hasTitle &&
+        (typeof title !== "string" ||
+          !title.trim() ||
+          title.trim().length > 200)) ||
+      (hasContent &&
         (typeof content !== "string" || content.length > 20000)) ||
-      (memory_date !== undefined &&
+      (hasMemoryDate &&
         memory_date !== null &&
         (typeof memory_date !== "string" ||
           !/^\d{4}-\d{2}-\d{2}$/.test(memory_date))) ||
-      (visibility !== undefined &&
-        !["private", "public"].includes(visibility))
+      (hasVisibility &&
+        !["private", "public"].includes(visibility)) ||
+      (hasPeople && !Array.isArray(people)) ||
+      (hasPlace && place !== null && typeof place !== "string") ||
+      (hasEmotion && emotion !== null && typeof emotion !== "string")
     ) {
       return res.status(400).json({
         message: "Invalid memory data.",
       });
     }
 
-    const result = await withUserTransaction(req.user.id, (client) =>
-      client.query(
-        `UPDATE memories
-         SET title = COALESCE($1, title),
-             content = COALESCE($2, content),
-             memory_date = COALESCE($3, memory_date),
-             visibility = COALESCE($4, visibility),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5
-         AND user_id = $6
-         AND deleted_at IS NULL
-         RETURNING *`,
-        [
-          title !== undefined ? title.trim() : null,
-          content ?? null,
-          memory_date ?? null,
-          visibility ?? null,
-          req.params.id,
-          req.user.id,
-        ]
-      )
+    const normalizedPeople = hasPeople ? normalizePeople(people) : [];
+    const normalizedPlace =
+      typeof place === "string" ? place.trim() : "";
+    const normalizedEmotion =
+      typeof emotion === "string" ? emotion.trim() : "";
+
+    const updatedMemory = await withUserTransaction(
+      req.user.id,
+      async (client) => {
+        // Update the main memory record.
+        const updated = await client.query(
+          `UPDATE memories
+           SET title = CASE WHEN $1 THEN $2 ELSE title END,
+               content = CASE WHEN $3 THEN $4 ELSE content END,
+               memory_date = CASE WHEN $5 THEN $6 ELSE memory_date END,
+               visibility = CASE WHEN $7 THEN $8 ELSE visibility END,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $9
+           AND user_id = $10
+           AND deleted_at IS NULL
+           RETURNING id`,
+          [
+            hasTitle,
+            hasTitle ? title.trim() : null,
+            hasContent,
+            hasContent ? content : null,
+            hasMemoryDate,
+            hasMemoryDate ? memory_date : null,
+            hasVisibility,
+            hasVisibility ? visibility : null,
+            req.params.id,
+            req.user.id,
+          ]
+        );
+
+        if (!updated.rows.length) {
+          return null;
+        }
+
+        const memoryId = updated.rows[0].id;
+
+        // Replace people relationships when people were supplied.
+        if (hasPeople) {
+          await client.query(
+            `DELETE FROM memory_people
+             WHERE memory_id = $1`,
+            [memoryId]
+          );
+
+          for (const personName of normalizedPeople) {
+            const personId = await findOrCreate(
+              client,
+              "people",
+              req.user.id,
+              personName
+            );
+
+            await client.query(
+              `INSERT INTO memory_people (memory_id, person_id)
+               VALUES ($1, $2)
+               ON CONFLICT DO NOTHING`,
+              [memoryId, personId]
+            );
+          }
+        }
+
+        // Replace or clear the place relationship.
+        if (hasPlace) {
+          await client.query(
+            `DELETE FROM memory_places
+             WHERE memory_id = $1`,
+            [memoryId]
+          );
+
+          if (normalizedPlace) {
+            const placeId = await findOrCreate(
+              client,
+              "places",
+              req.user.id,
+              normalizedPlace
+            );
+
+            await client.query(
+              `INSERT INTO memory_places (memory_id, place_id)
+               VALUES ($1, $2)
+               ON CONFLICT DO NOTHING`,
+              [memoryId, placeId]
+            );
+          }
+        }
+
+        // Replace or clear the emotion relationship.
+        if (hasEmotion) {
+          await client.query(
+            `DELETE FROM memory_tags
+             WHERE memory_id = $1`,
+            [memoryId]
+          );
+
+          if (normalizedEmotion) {
+            const tagId = await findOrCreate(
+              client,
+              "tags",
+              req.user.id,
+              normalizedEmotion
+            );
+
+            await client.query(
+              `INSERT INTO memory_tags (memory_id, tag_id)
+               VALUES ($1, $2)
+               ON CONFLICT DO NOTHING`,
+              [memoryId, tagId]
+            );
+          }
+        }
+
+        // Return the complete updated memory, including relationships.
+        const result = await client.query(
+          `${getMemoryQuery}
+           WHERE m.id = $1
+           AND m.user_id = $2
+           AND m.deleted_at IS NULL`,
+          [memoryId, req.user.id]
+        );
+
+        return result.rows[0];
+      }
     );
 
-    if (!result.rows.length) {
+    if (!updatedMemory) {
       return res.status(404).json({
         message: "Memory not found.",
       });
     }
 
-    res.json(result.rows[0]);
+    res.json(updatedMemory);
   } catch (error) {
     console.error("Update memory error:", error.message);
     res.status(500).json({
       message: "Could not update memory.",
-    });
-  }
-};
-
-// DELETE: soft archive
-export const deleteMemory = async (req, res) => {
-  try {
-    if (!isValidUUID(req.params.id)) {
-      return res.status(400).json({
-        message: "Invalid memory ID.",
-      });
-    }
-
-    const result = await withUserTransaction(req.user.id, (client) =>
-      client.query(
-        `UPDATE memories
-         SET deleted_at = CURRENT_TIMESTAMP,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1
-         AND user_id = $2
-         AND deleted_at IS NULL
-         RETURNING id`,
-        [req.params.id, req.user.id]
-      )
-    );
-
-    if (!result.rows.length) {
-      return res.status(404).json({
-        message: "Memory not found.",
-      });
-    }
-
-    res.json({
-      message: "Memory archived successfully.",
-    });
-  } catch (error) {
-    console.error("Archive memory error:", error.message);
-    res.status(500).json({
-      message: "Could not archive memory.",
     });
   }
 };
