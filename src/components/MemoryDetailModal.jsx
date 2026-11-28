@@ -1,9 +1,11 @@
+
 import { useEffect } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 export default function MemoryDetailModal({
   memory,
   onClose,
+  onEdit,
   onDelete,
   showDeleteConfirm,
   setShowDeleteConfirm,
@@ -41,12 +43,16 @@ export default function MemoryDetailModal({
       />
 
       <motion.div
-        initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.96, y: 10 }}
+        initial={
+          shouldReduceMotion
+            ? { opacity: 1 }
+            : { opacity: 0, scale: 0.96, y: 10 }
+        }
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="relative my-auto w-full max-w-2xl rounded-3xl border border-amber-400/20 bg-gradient-to-b from-[#121422] to-[#090b14] p-6 sm:p-10 shadow-[0_20px_60px_rgba(0,0,0,0.7)] text-slate-100"
       >
-        {/* Folio Header Header Bar */}
+        {/* Folio Header */}
         <div className="flex items-center justify-between border-b border-white/[0.08] pb-5">
           <div className="flex items-center gap-2.5 text-xs font-sans text-slate-400">
             <span className="font-mono text-amber-300/90 text-xs tracking-wider">
@@ -69,7 +75,9 @@ export default function MemoryDetailModal({
         <div className="mt-6">
           <div className="flex items-center gap-2 text-xs font-sans text-violet-300 uppercase tracking-widest mb-2">
             <span>Resonance:</span>
-            <span className="font-semibold text-amber-200">{memory.emotion}</span>
+            <span className="font-semibold text-amber-200">
+              {memory.emotion}
+            </span>
           </div>
           <h2 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-medium tracking-wide text-amber-50">
             {memory.title}
@@ -105,7 +113,9 @@ export default function MemoryDetailModal({
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-slate-500 italic">No companions recorded.</p>
+              <p className="text-xs text-slate-500 italic">
+                No companions recorded.
+              </p>
             )}
           </div>
 
@@ -124,45 +134,62 @@ export default function MemoryDetailModal({
                 {memory.place}
               </button>
             ) : (
-              <p className="text-xs text-slate-500 italic">No location recorded.</p>
+              <p className="text-xs text-slate-500 italic">
+                No location recorded.
+              </p>
             )}
           </div>
         </div>
 
-        {/* Two-Step Archival Deletion */}
+        {/* Edit and Archive Actions */}
         <div className="mt-8 border-t border-white/[0.08] pt-6">
           {!showDeleteConfirm ? (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-xs text-slate-500 font-serif italic">
-                Vault Record permanent preservation
+                Your memories remain yours to revise or archive.
               </span>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="text-xs font-sans text-rose-400/80 hover:text-rose-300 transition-colors py-2 px-3 rounded-lg hover:bg-rose-950/20"
-              >
-                Dissolve this memory
-              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-4 py-2 text-xs font-sans text-amber-200 transition-colors hover:border-amber-300/50 hover:bg-amber-400/[0.12]"
+                >
+                  ✎ Edit Memory
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-xs font-sans text-rose-400/80 hover:text-rose-300 transition-colors py-2 px-3 rounded-lg hover:bg-rose-950/20"
+                >
+                  Archive Memory
+                </button>
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-5 font-sans">
               <p className="text-sm font-medium text-rose-200">
-                Dissolve this memory from the archive?
+                Archive this memory?
               </p>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-                This will permanently erase this remembrance and disconnect it from all associated companions and sanctuaries. This action cannot be reversed.
+                This will move the memory out of your active archive. Its
+                stored record will be retained as an archived entry.
               </p>
               <div className="mt-4 flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowDeleteConfirm(false)}
                   className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] py-2.5 text-xs text-slate-300 transition hover:bg-white/[0.08]"
                 >
-                  Preserve & Keep
+                  Keep Memory
                 </button>
                 <button
+                  type="button"
                   onClick={onDelete}
                   className="flex-1 rounded-xl bg-rose-600/80 hover:bg-rose-500 py-2.5 text-xs font-medium text-white transition shadow-[0_0_15px_rgba(225,29,72,0.3)]"
                 >
-                  Yes, Dissolve Permanently
+                  Yes, Archive Memory
                 </button>
               </div>
             </div>
